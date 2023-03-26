@@ -1,0 +1,52 @@
+{
+  "_name_or_path": "google/vit-base-patch16-224-in21k",
+  "architectures": [
+    "ViTForImageClassification"
+  ],
+  "attention_probs_dropout_prob": 0.0,
+  "encoder_stride": 16,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.0,
+  "hidden_size": 768,
+  "id2label": {
+    "0": "Biels",
+    "1": "He",
+    "10": "Phf1",
+    "11": "Cp13",
+    "2": "Syn",
+    "3": "Tau",
+    "4": "Ubiq",
+    "5": "Ptdp",
+    "6": "At8",
+    "7": "Lfb",
+    "8": "Abeta",
+    "9": "P62"
+  },
+  "image_size": 224,
+  "initializer_range": 0.02,
+  "intermediate_size": 3072,
+  "label2id": {
+    "Abeta": "8",
+    "At8": "6",
+    "Biels": "0",
+    "Cp13": "11",
+    "He": "1",
+    "Lfb": "7",
+    "P62": "9",
+    "Phf1": "10",
+    "Ptdp": "5",
+    "Syn": "2",
+    "Tau": "3",
+    "Ubiq": "4"
+  },
+  "layer_norm_eps": 1e-12,
+  "model_type": "vit",
+  "num_attention_heads": 12,
+  "num_channels": 3,
+  "num_hidden_layers": 12,
+  "patch_size": 16,
+  "problem_type": "single_label_classification",
+  "qkv_bias": true,
+  "torch_dtype": "float32",
+  "transformers_version": "4.26.1"
+}

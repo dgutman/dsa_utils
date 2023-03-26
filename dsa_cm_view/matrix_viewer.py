@@ -1,11 +1,13 @@
 import json
 
-from dash import Dash, dcc, html
+from dash import Dash, dcc, html, dash_table
 from dash.dependencies import Input, Output
 import plotly.express as px
 import pandas as pd
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
+import numpy as np
+from collections import OrderedDict
 
 
 def confusion_matrix(labelsTrue, labelsOutput, classCount):
@@ -25,12 +27,12 @@ def confusion_matrix(labelsTrue, labelsOutput, classCount):
 style = {
     "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
     "textAlign": "center",
-    "width": 160
+    "width": 320
 }
 
 dmcStuff = dmc.SimpleGrid(
     cols=4,
-    spacing="sm",
+    spacing="lg",
     id="image-grid",
     breakpoints=[
         {"maxWidth": 980, "cols": 3, "spacing": "md"},
@@ -46,6 +48,24 @@ dmcStuff = dmc.SimpleGrid(
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',dbc.themes.BOOTSTRAP]
 
 app = Dash(__name__, external_stylesheets=external_stylesheets)
+
+df = pd.read_csv("./adrcThumbMetadata.csv")
+
+
+dsaItemTable = dash_table.DataTable(
+    data=df.to_dict('records'),
+    columns=[{'id': c, 'name': c} for c in df.columns],
+    page_size=10)
+
+# dsaItemTable = dbc.DataTable(data=df.to_dict('records'), striped=True, bordered=True, hover=True,page_size=10)
+
+
+# dsaItemTable = dash_table.DataTable(
+#     id='table',
+#     columns=[{"name": i, "id": i} for i in df.columns],
+#     data=df.to_dict('records'),
+# )
+
 
 styles = {
     'pre': {
@@ -86,6 +106,7 @@ fig.update_layout(clickmode='event+select')
 fig.update_traces(marker_size=20)
 
 app.layout = html.Div([
+    dbc.Row(dsaItemTable),
     dcc.Graph(
         id='confusionMatrix-interactive',
         figure=hmap
@@ -114,8 +135,7 @@ def display_selected_data(selectedData):
     for i in range(1,10):
         imgId = imageSet[ix+i]['_id']
         thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-        imageArray.append(html.Img(src=thumbUrl,style=style))
-                                  
+        imageArray.append(html.Img(src=thumbUrl,style=style))                      
 
     imgId = imageSet[ix]['_id']
     thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
