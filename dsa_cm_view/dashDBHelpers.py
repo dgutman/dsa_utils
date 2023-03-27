@@ -1,6 +1,12 @@
 import sqlite3
 import pandas as pd
 
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+
 
 dbName = 'sqlitedb/confMatrix.db'
 
@@ -20,12 +26,13 @@ def createItemTable( dbName):
     ### Create table to store confusion matrix data
     con = sqlite3.connect(dbName)
     df = pd.read_csv("adrcThumbMetadata.csv")
-    df.to_sql("dsai",con)
+    df.to_sql("dsai",con,if_exists='replace')
     # df = pd.read_sql_query("select * from %s" % tableName, con)
 
     sql = 'CREATE TABLE IF NOT EXISTS dsaItems ( id INTEGER PRIMARY KEY, dsaItemData JSON, itemHash TEXT)'
-
+    c = con.cursor()
     sql = 'CREATE TABLE IF NOT EXISTS modelResponses ( id INTEGER PRIMARY KEY, modelName TEXT, modelResponse JSON)'
+    c.execute(sql)
     con.close()
 
 

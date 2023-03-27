@@ -1,5 +1,4 @@
 import json
-
 from dash import Dash, dcc, html, dash_table
 from dash.dependencies import Input, Output
 import plotly.express as px
@@ -8,27 +7,70 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import numpy as np
 from collections import OrderedDict
+import plotly.figure_factory as ff
+import confMatrix_graph as cmg
 
 
-def confusion_matrix(labelsTrue, labelsOutput, classCount):
-    combined = np.asarray([labelsTrue, labelsOutput]).T
-    uniqueVals, uniqueCounts = np.unique(combined, return_counts=True, axis=0)
-    
-    confusionMatrix = np.zeros((classCount, classCount))
-    allUnique = np.sort(np.unique(combined.astype(int)))
-    
-    mapped = {uniqueVal: val for uniqueVal, val in zip(allUnique.tolist(), range(allUnique.size))}
-    
-    for (val, count) in zip(uniqueVals, uniqueCounts):
-        confusionMatrix[mapped[int(val[0])], mapped[int(val[1])]] += count
-        
-    return confusionMatrix
+
+## TO REFACTOR
+styles = {
+    'pre': {
+        'border': 'thin lightgrey solid',
+        'overflowX': 'scroll'
+    }
+}
 
 style = {
     "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
     "textAlign": "center",
     "width": 320
 }
+
+
+external_stylesheets = [
+    'https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
+app = Dash(__name__, external_stylesheets=external_stylesheets)
+
+####################### LOAD ADRC Data Table ##############################
+df = pd.read_csv("./adrcThumbMetadata.csv")
+
+dsaItemTable = dash_table.DataTable(
+    data=df.to_dict('records'),
+    columns=[{'id': c, 'name': c} for c in df.columns],
+    page_size=10)
+
+dsaBaseUrl = "https://styx.neurology.emory.edu/girder/api/v1"
+
+with open("imageSetForCm.json", "r") as fp:
+    imageSet = json.load(fp)
+
+image_df = pd.DataFrame(imageSet)
+
+
+data = [[1, 25, 30, 50, 1], [20, 1, 60, 80, 30], [30, 60, 1, 5, 20]]
+hmap = px.imshow(data,
+                 labels=dict(x="Day of Week", y="Time of Day",
+                             color="Productivity"),
+                 x=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                 y=['Morning', 'Afternoon', 'Evening']
+                 )
+hmap.update_xaxes(side="top")
+
+df = pd.DataFrame({
+    "x": [1, 2, 1, 2],
+    "y": [1, 2, 3, 4],
+    "customdata": [1, 2, 3, 4],
+    "fruit": ["apple", "apple", "orange", "orange"]
+})
+
+figf = px.scatter(df, x="x", y="y", color="fruit", custom_data=["customdata"])
+
+figf.update_layout(clickmode='event+select')
+
+figf.update_traces(marker_size=20)
+
+dfm = px.data.medals_wide(indexed=True)
+# fig = px.imshow(dfm)
 
 dmcStuff = dmc.SimpleGrid(
     cols=4,
@@ -40,102 +82,87 @@ dmcStuff = dmc.SimpleGrid(
         {"maxWidth": 600, "cols": 1, "spacing": "sm"},
     ],
     children=[
-        html.Div("", style=style), ### This is where the images get dumped
+        html.Div("", style=style),  # This is where the images get dumped
     ],
 )
 
-
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',dbc.themes.BOOTSTRAP]
-
-app = Dash(__name__, external_stylesheets=external_stylesheets)
-
-df = pd.read_csv("./adrcThumbMetadata.csv")
+with open("predictionSample.json","r") as fp:
+    predictionSample = json.load(fp)
 
 
-dsaItemTable = dash_table.DataTable(
-    data=df.to_dict('records'),
-    columns=[{'id': c, 'name': c} for c in df.columns],
-    page_size=10)
-
-# dsaItemTable = dbc.DataTable(data=df.to_dict('records'), striped=True, bordered=True, hover=True,page_size=10)
 
 
-# dsaItemTable = dash_table.DataTable(
-#     id='table',
-#     columns=[{"name": i, "id": i} for i in df.columns],
-#     data=df.to_dict('records'),
-# )
+
+iframeExample = 'https://computablebrain.emory.edu/histomics#?image=638147637f8a5e686a52dded&bounds=24400%2C51228%2C34733%2C56376%2C0'
 
 
-styles = {
-    'pre': {
-        'border': 'thin lightgrey solid',
-        'overflowX': 'scroll'
-    }
-}
 
 
-dsaBaseUrl = "https://styx.neurology.emory.edu/girder/api/v1"
+### Statistics regarding the main ADRC data set including current and predicted Stains.. this will evolve over time
+pd_df = pd.DataFrame(predictionSample)
 
+currentStainHistogram = px.histogram(pd_df,x='currentStain')
+predictedStainHistogram = px.histogram(pd_df,x='predictedStain')
+dataSetDescriptors = dbc.Row([
+    dbc.Col(dcc.Graph(figure=currentStainHistogram),width=3),
+    dbc.Col(dcc.Graph(figure=predictedStainHistogram),width=3)
+])
 
-with open("imageSetForCm.json","r") as fp:
-    imageSet = json.load(fp)
+#    html.Iframe(src=iframeExample,
+#                 style={"height": "600px", "width": "100%"}),
+origIexample = "https://www.ons.gov.uk/visualisations/dvc914/map/index.html"
 
-image_df = pd.DataFrame(imageSet)
-
-
-data=[[1, 25, 30, 50, 1], [20, 1, 60, 80, 30], [30, 60, 1, 5, 20]]
-hmap = px.imshow(data,
-                labels=dict(x="Day of Week", y="Time of Day", color="Productivity"),
-                x=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-                y=['Morning', 'Afternoon', 'Evening']
-               )
-hmap.update_xaxes(side="top")
-
-df = pd.DataFrame({
-    "x": [1,2,1,2],
-    "y": [1,2,3,4],
-    "customdata": [1,2,3,4],
-    "fruit": ["apple", "apple", "orange", "orange"]
-})
-
-fig = px.scatter(df, x="x", y="y", color="fruit", custom_data=["customdata"])
-
-fig.update_layout(clickmode='event+select')
-
-fig.update_traces(marker_size=20)
+accordion = html.Div(
+    dbc.Accordion(
+        [
+           
+            
+            dbc.AccordionItem(
+    
+               dataSetDescriptors,
+                title="DSA Item Stats"            ),
+            dbc.AccordionItem(
+                [
+                       dsaItemTable
+                ],
+                title="DSA Item Table",
+            ),
+            dbc.AccordionItem(
+              [ dcc.Graph(figure=px.imshow(dfm))],
+                title="Graph Set 3",
+            ),
+        ]        
+    )
+)
 
 app.layout = html.Div([
-    dbc.Row(dsaItemTable),
+    accordion,
     dcc.Graph(
         id='confusionMatrix-interactive',
         figure=hmap
     ),
     dmcStuff,
-
-       html.Pre(id='hmap-selected-data', style=styles['pre']),
-  
+    html.Pre(id='hmap-selected-data', style=styles['pre']),
 ])
 
+# using the z property from the current confusoin matrix, this will need to change
 
 
-## using the z property from the current confusoin matrix, this will need to change
 
 @app.callback(
     [Output('hmap-selected-data', 'children'),
-     Output("image-grid",'children')],
+     Output("image-grid", 'children')],
     Input('confusionMatrix-interactive', 'hoverData'))
 def display_selected_data(selectedData):
     print(selectedData)
     ix = int(selectedData['points'][0]['z'])
 
+    imageArray = []
 
-    imageArray =    []
-    
-    for i in range(1,10):
+    for i in range(1, 10):
         imgId = imageSet[ix+i]['_id']
         thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-        imageArray.append(html.Img(src=thumbUrl,style=style))                      
+        imageArray.append(html.Img(src=thumbUrl, style=style))
 
     imgId = imageSet[ix]['_id']
     thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
@@ -145,79 +172,3 @@ def display_selected_data(selectedData):
 
 if __name__ == '__main__':
     app.run_server(debug=True)
-
-# @app.callback(
-#     Output('relayout-data', 'children'),
-#     Input('basic-interactions', 'relayoutData'))
-# def display_relayout_data(relayoutData):
-#     return json.dumps(relayoutData, indent=2)
-
-
-# @app.callback(
-#     Output('selected-data', 'children'),
-#     Input('basic-interactions', 'selectedData'))
-# def display_selected_data(selectedData):
-#     return json.dumps(selectedData, indent=2)
-
-# @app.callback(
-#     Output('hover-data', 'children'),
-#     Input('basic-interactions', 'hoverData'))
-# def display_hover_data(hoverData):
-#     return json.dumps(hoverData, indent=2)
-
-
-# @app.callback(
-#     Output('click-data', 'children'),
-#     Input('basic-interactions', 'clickData'))
-# def display_click_data(clickData):
-#     return json.dumps(clickData, indent=2)
-  # dcc.Graph(
-    #     id='basic-interactions',
-    #     figure=fig
-    # ),
-
-    # html.Div(className='row', children=[
-    #     html.Div([
-    #         dcc.Markdown("""
-    #             **Hover Data**
-
-    #             Mouse over values in the graph.
-    #         """),
-    #         html.Pre(id='hover-data', style=styles['pre'])
-    #     ], className='three columns'),
-
-    #     html.Div([
-    #         dcc.Markdown("""
-    #             **Click Data**
-
-    #             Click on points in the graph.
-    #         """),
-    #         html.Pre(id='click-data', style=styles['pre']),
-    #     ], className='three columns'),
-
-    #     html.Div([
-    #         dcc.Markdown("""
-    #             **Selection Data**
-
-    #             Choose the lasso or rectangle tool in the graph's menu
-    #             bar and then select points in the graph.
-
-    #             Note that if `layout.clickmode = 'event+select'`, selection data also
-    #             accumulates (or un-accumulates) selected data if you hold down the shift
-    #             button while clicking.
-    #         """),
-    #         html.Pre(id='selected-data', style=styles['pre']),
-    #     ], className='three columns'),
-
-    #     html.Div([
-    #         dcc.Markdown("""
-    #             **Zoom and Relayout Data**
-
-    #             Click and drag on the graph to zoom or click on the zoom
-    #             buttons in the graph's menu bar.
-    #             Clicking on legend items will also fire
-    #             this event.
-    #         """),
-    #         html.Pre(id='relayout-data', style=styles['pre']),
-    #     ], className='three columns')
-    # ])
