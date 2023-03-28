@@ -1,3 +1,4 @@
+from sklearn import metrics
 import json
 from dash import Dash, dcc, html, dash_table
 from dash.dependencies import Input, Output
@@ -7,12 +8,11 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import numpy as np
 from collections import OrderedDict
-import plotly.figure_factory as ff
 import confMatrix_graph as cmg
+import plotly.figure_factory as ff
+from graphCallBackLayout import callBackOutputs
 
-
-
-## TO REFACTOR
+# TO REFACTOR
 styles = {
     'pre': {
         'border': 'thin lightgrey solid',
@@ -23,21 +23,17 @@ styles = {
 style = {
     "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
     "textAlign": "center",
-    "width": 320
+    "width": 200,
+    "height": 200
 }
-
 
 external_stylesheets = [
     'https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
+
 app = Dash(__name__, external_stylesheets=external_stylesheets)
 
 ####################### LOAD ADRC Data Table ##############################
 df = pd.read_csv("./adrcThumbMetadata.csv")
-
-dsaItemTable = dash_table.DataTable(
-    data=df.to_dict('records'),
-    columns=[{'id': c, 'name': c} for c in df.columns],
-    page_size=10)
 
 dsaBaseUrl = "https://styx.neurology.emory.edu/girder/api/v1"
 
@@ -46,34 +42,56 @@ with open("imageSetForCm.json", "r") as fp:
 
 image_df = pd.DataFrame(imageSet)
 
+with open("predictionSample.json", "r") as fp:
+    predictionSample = json.load(fp)
 
-data = [[1, 25, 30, 50, 1], [20, 1, 60, 80, 30], [30, 60, 1, 5, 20]]
-hmap = px.imshow(data,
-                 labels=dict(x="Day of Week", y="Time of Day",
-                             color="Productivity"),
-                 x=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-                 y=['Morning', 'Afternoon', 'Evening']
-                 )
-hmap.update_xaxes(side="top")
+# Statistics regarding the main ADRC data set including current and predicted Stains.. this will evolve over time
+pd_df = pd.DataFrame(predictionSample)
 
-df = pd.DataFrame({
-    "x": [1, 2, 1, 2],
-    "y": [1, 2, 3, 4],
-    "customdata": [1, 2, 3, 4],
-    "fruit": ["apple", "apple", "orange", "orange"]
-})
+currentStainHistogram = px.histogram(pd_df, x='currentStain')
+predictedStainHistogram = px.histogram(pd_df, x='predictedStain')
+dataSetDescriptors = dbc.Row([
+    dbc.Col(dcc.Graph(figure=currentStainHistogram), width=3),
+    dbc.Col(dcc.Graph(figure=predictedStainHistogram), width=3)
+])
 
-figf = px.scatter(df, x="x", y="y", color="fruit", custom_data=["customdata"])
+with open("predictionSample.json", "r") as fp:
+    preds = json.load(fp)
 
-figf.update_layout(clickmode='event+select')
+df_pred = pd.DataFrame(preds)
 
-figf.update_traces(marker_size=20)
+lblSet = ['HE', 'Tau', 'Syn', 'aBeta', 'pTDP', 'Biels']
+df1 = df_pred[df_pred['currentStain'].map(
+    df_pred['currentStain'].value_counts()) > 100]
 
-dfm = px.data.medals_wide(indexed=True)
-# fig = px.imshow(dfm)
+df1.replace({"Abeta": "aBeta", "Ptdp": "pTDP", "He": "HE"}, inplace=True)
+df1.drop(columns=['allPredictions'])
+cm = metrics.confusion_matrix(list(df1.currentStain.values), list(
+    df1.predictedStain.values), labels=df1.currentStain.unique())
+
+# cmfig = metrics.ConfusionMatrixDisplay(cm,display_labels=lblSet)
+print(df1.currentStain.unique())
+print(df1.predictedStain.unique())
+
+print(df_pred)
+
+df = pd.read_json("predictionSample.json")
+df = df.drop(columns='allPredictions')
+
+
+dsaItemTable = dash_table.DataTable(
+    data=df.to_dict('records'),
+    columns=[{'id': c, 'name': c} for c in df.columns],
+    page_size=10)
+
+z = cm
+x = lblSet
+y = lblSet
+print(cm)
+cmfig = ff.create_annotated_heatmap(cm, x=x, y=y, colorscale='Viridis')
 
 dmcStuff = dmc.SimpleGrid(
-    cols=4,
+    cols=8,
     spacing="lg",
     id="image-grid",
     breakpoints=[
@@ -82,93 +100,89 @@ dmcStuff = dmc.SimpleGrid(
         {"maxWidth": 600, "cols": 1, "spacing": "sm"},
     ],
     children=[
-        html.Div("", style=style),  # This is where the images get dumped
+        # This is where the images get dumped
+        html.Div(" ", style=style),
     ],
 )
 
-with open("predictionSample.json","r") as fp:
-    predictionSample = json.load(fp)
-
-
-
-
-
-iframeExample = 'https://computablebrain.emory.edu/histomics#?image=638147637f8a5e686a52dded&bounds=24400%2C51228%2C34733%2C56376%2C0'
-
-
-
-
-### Statistics regarding the main ADRC data set including current and predicted Stains.. this will evolve over time
-pd_df = pd.DataFrame(predictionSample)
-
-currentStainHistogram = px.histogram(pd_df,x='currentStain')
-predictedStainHistogram = px.histogram(pd_df,x='predictedStain')
-dataSetDescriptors = dbc.Row([
-    dbc.Col(dcc.Graph(figure=currentStainHistogram),width=3),
-    dbc.Col(dcc.Graph(figure=predictedStainHistogram),width=3)
-])
-
-#    html.Iframe(src=iframeExample,
-#                 style={"height": "600px", "width": "100%"}),
-origIexample = "https://www.ons.gov.uk/visualisations/dvc914/map/index.html"
-
-accordion = html.Div(
-    dbc.Accordion(
-        [
-           
-            
-            dbc.AccordionItem(
-    
-               dataSetDescriptors,
-                title="DSA Item Stats"            ),
-            dbc.AccordionItem(
-                [
-                       dsaItemTable
-                ],
-                title="DSA Item Table",
-            ),
-            dbc.AccordionItem(
-              [ dcc.Graph(figure=px.imshow(dfm))],
-                title="Graph Set 3",
-            ),
-        ]        
-    )
+mancordion = dmc.AccordionMultiple(
+    children=[
+        dmc.AccordionItem(
+            [
+                dmc.AccordionControl("DSA Item DataTable"),
+                dmc.AccordionPanel(
+                    dsaItemTable
+                ),
+            ],
+            value="DSA Datatable",
+        ),
+        dmc.AccordionItem(
+            [
+                dmc.AccordionControl("Confusion Matrix"),
+                dmc.AccordionPanel(
+                    dbc.Row(
+                        [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
+                         dbc.Col(
+                         html.Div(id='matrixSelectionInfo',  children=[]), width=3)
+                         ])
+                ),
+            ],
+            value="Confusion Matrix",
+        ),     dmc.AccordionItem(
+            [
+                dmc.AccordionControl("callBacks"),
+                dmc.AccordionPanel(callBackOutputs)
+            ],
+            value="callBacks",
+        ),
+        dmc.AccordionItem(
+            [
+                dmc.AccordionControl("imageGrid"),
+                dmc.AccordionPanel(
+                ),
+            ],
+            value="image View",
+        ),
+    ],
 )
 
 app.layout = html.Div([
-    accordion,
-    dcc.Graph(
-        id='confusionMatrix-interactive',
-        figure=hmap
-    ),
-    dmcStuff,
-    html.Pre(id='hmap-selected-data', style=styles['pre']),
+    mancordion,
+    dmcStuff
 ])
 
-# using the z property from the current confusoin matrix, this will need to change
 
+@ app.callback(
 
-
-@app.callback(
-    [Output('hmap-selected-data', 'children'),
-     Output("image-grid", 'children')],
-    Input('confusionMatrix-interactive', 'hoverData'))
+    Output("image-grid", 'children'),
+    Output("matrixSelectionInfo", "children"),
+    Input('confusionMatrix-interactions', 'hoverData'))
 def display_selected_data(selectedData):
     print(selectedData)
-    ix = int(selectedData['points'][0]['z'])
+    if selectedData:
+        ix = int(selectedData['points'][0]['z'])
+        imageArray = []
 
-    imageArray = []
-
-    for i in range(1, 10):
-        imgId = imageSet[ix+i]['_id']
-        thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-        imageArray.append(html.Img(src=thumbUrl, style=style))
-
-    imgId = imageSet[ix]['_id']
-    thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-    print(thumbUrl)
-    return (json.dumps(selectedData, indent=2), imageArray)
+        for i in range(1, 9):
+            imgId = imageSet[ix+i]['_id']
+            thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
+            imageArray.append(html.Img(src=thumbUrl, style=style))
+        # imgId = imageSet[ix]['_id']
+        # thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
+        # print(thumbUrl)
+        return (imageArray, html.Div(json.dumps(selectedData)))
+    # Dash ism... have to return two null arrays or callback fxn gets confused on the first run
+    return ([], [])
 
 
 if __name__ == '__main__':
     app.run_server(debug=True)
+
+# @app.callback(
+#     Output('hover-data', 'children'),
+#     Input('confusionMatrix-interactions', 'hoverData'))
+# def display_hover_data(hoverData):
+#     return json.dumps(hoverData, indent=2)
+
+
+# # using the z property from the current confusoin matrix, this will need to change
