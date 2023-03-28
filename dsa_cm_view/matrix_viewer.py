@@ -12,26 +12,12 @@ import confMatrix_graph as cmg
 import plotly.figure_factory as ff
 from graphCallBackLayout import callBackOutputs
 import get_dataset as gds
-
+import dsaDataTable as dtt
 
 # Config Parameters, may move to a yaml or config.json file
 dbName = "sqliteDb/confMatrixDB.db"
 dsaBaseUrl = "https://styx.neurology.emory.edu/girder/api/v1"
 
-# TO REFACTOR
-styles = {
-    'pre': {
-        'border': 'thin lightgrey solid',
-        'overflowX': 'scroll'
-    }
-}
-
-style = {
-    "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
-    "textAlign": "center",
-    "width": 200,
-    "height": 200
-}
 
 external_stylesheets = [
     'https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
@@ -42,33 +28,8 @@ app = Dash(__name__, external_stylesheets=external_stylesheets)
 df = gds.getConfusionMatrixData(dbName)
 
 
-# imgViewer = html.Div(json.dumps(selectedData))
-
-
-table = html.Div([
-    dash_table.DataTable(
-        id='datatable-interactivity',
-        columns=[
-            {"name": i, "id": i, "deletable": False, "selectable": True} for i in df.columns
-        ],
-        data=df.to_dict('records'),
-        editable=True,
-        filter_action="native",
-        sort_action="native",
-        sort_mode="multi",
-        column_selectable="single",
-        row_selectable="multi",
-        row_deletable=True,
-        selected_columns=[],
-        selected_rows=[],
-        page_action="native",
-        page_current=0,
-        page_size=10,
-    ),
-    dbc.Row([
-        dbc.Col(html.Div(id='cur-hover-image'), width=3),
-        dbc.Col(dbc.Row(id='datatable-interactivity-container'), width=9)])
-])
+table = dtt.gen_DSA_DataTable(
+    df, columns_to_ignore=['modelResponse', 'baseParentId', 'description'])
 
 
 @app.callback(
@@ -90,19 +51,7 @@ def display_click_data(active_cell, table_data):
 
     else:
         out = 'no cell selected'
-    return [json.dumps(out, indent=2), html.Img(src=thumbUrl)]
-
-
-# @app.callback(
-#     Output('cur-hover-image', 'children'),
-#     [Input('datatable-interactivity', 'active_cell')],
-
-#     # Input('datatable-interactivity', 'selected_row_ids'),
-#     [State('datatable-interactivity', 'data')]
-# )
-# def update_img_dataview(active_cell, table_data):
-#     print(active_cell)
-#     return json.dumps(active_cell)
+    return [json.dumps(active_cell, indent=2), html.Img(src=thumbUrl)]
 
 
 @app.callback(
@@ -126,9 +75,7 @@ def update_graphs(rows, derived_virtual_selected_rows):
 
     colors = ['#7FDBFF' if i in derived_virtual_selected_rows else '#0074D9'
               for i in range(len(dff))]
-
     histSet = []
-
     # Add in the image viewer window here
 
     for c in ["currentStain", "modelLabel"]:
@@ -145,40 +92,71 @@ def update_graphs(rows, derived_virtual_selected_rows):
     return histSet
 
 
-# Now creating an image viewer
-
-    # return [
-    #     dbc.Col(dcc.Graph(
-    #         id=column,
-    #         figure=px.histogram(dff, x=column)
-
-    #     ), width=3)
-    #     # check if column exists - user may have deleted it
-    #     # If `column.deletable=False`, then you don't
-    #     # need to do this check.
-    #     for column in ["currentStain", "modelLabel"] if column in dff
-    # ]
-
-
-# table = dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True)
-
-
-# with open("imageSetForCm.json", "r") as fp:
-#     imageSet = json.load(fp)
-
-# image_df = pd.DataFrame(imageSet)
-# with open("predictionSample.json", "r") as fp:
-#     predictionSample = json.load(fp)
-# Statistics regarding the main ADRC data set including current and predicted Stains.. this will evolve over time
-pd_df = df
-# pd.DataFrame(predictionSample)
-
-currentStainHistogram = px.histogram(pd_df, x='currentStain')
-predictedStainHistogram = px.histogram(pd_df, x='modelResponse')
+currentStainHistogram = px.histogram(df, x='currentStain')
+predictedStainHistogram = px.histogram(df, x='modelResponse')
 dataSetDescriptors = [
-    dbc.Col(dcc.Graph(figure=currentStainHistogram), width=3),
-    dbc.Col(dcc.Graph(figure=predictedStainHistogram), width=3)
+    dbc.Col(dcc.Graph(figure=currentStainHistogram)),
+    dbc.Col(dcc.Graph(figure=predictedStainHistogram))
 ]
+
+app.layout = html.Div([
+    table
+    # dmc.AccordionPanel(
+    #     dbc.Row(
+    #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
+    #             dbc.Col(
+    #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
+    #          ])
+    # ),
+    # mancordion,
+    # dmcStuff
+])
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
+
+# def getSelectedItemSet(confMatrix_df, xCol, yCol):
+#     """This expects the pandas dataframe which should be the data fed into the confusion matrix generation
+#     and I want to filter this dataframe and return the rows that match the selected row/column / x/y grid
+#     So for example, I may want to find the rows where x/true = aBeta and y/predicted=pTDP
+
+#     xCol = current Stain,  y=predictedStain
+#     """
+
+
+# @ app.callback(
+
+#     Output("image-grid", 'children'),
+#     Output("matrixSelectionInfo", "children"),
+#     Input('confusionMatrix-interactions', 'hoverData'))
+# def display_selected_data(selectedData):
+#     print(selectedData)
+#     if selectedData:
+#         ix = int(selectedData['points'][0]['z'])
+#         imageArray = []
+
+#         for i in range(1, 9):
+#             imgId = imageSet[ix+i]['_id']
+#             thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
+#             imageArray.append(html.Img(src=thumbUrl, style=style))
+#         # imgId = imageSet[ix]['_id']
+#         # thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
+#         # print(thumbUrl)
+#         return (imageArray, html.Div(json.dumps(selectedData)))
+#     # Dash ism... have to return two null arrays or callback fxn gets confused on the first run
+#     return ([], [])
+
+
+# @app.callback(
+#     Output('hover-data', 'children'),
+#     Input('confusionMatrix-interactions', 'hoverData'))
+# def display_hover_data(hoverData):
+#     return json.dumps(hoverData, indent=2)
+
+
+# # using the z property from the current confusoin matrix, this will need to change
+# Markdown supports images with this syntax: ![alt](src) where alt refers to the image's alt text and src is the path to the image (the src property).
 # figure={
 #     "data": [
 #         {
@@ -200,6 +178,20 @@ dataSetDescriptors = [
 # },
 # with open("predictionSample.json", "r") as fp:
 #     preds = json.load(fp)
+# TO REFACTOR
+# styles = {
+#     'pre': {
+#         'border': 'thin lightgrey solid',
+#         'overflowX': 'scroll'
+#     }
+# }
+
+# style = {
+#     "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
+#     "textAlign": "center",
+#     "width": 200,
+#     "height": 200
+# }
 
 # df_pred = pd.DataFrame(preds)
 
@@ -289,61 +281,40 @@ dataSetDescriptors = [
 # )
 
 
-app.layout = html.Div([
-    table
-    # dmc.AccordionPanel(
-    #     dbc.Row(
-    #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
-    #             dbc.Col(
-    #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
-    #          ])
-    # ),
-    # mancordion,
-    # dmcStuff
-])
-
-
-# def getSelectedItemSet(confMatrix_df, xCol, yCol):
-#     """This expects the pandas dataframe which should be the data fed into the confusion matrix generation
-#     and I want to filter this dataframe and return the rows that match the selected row/column / x/y grid
-#     So for example, I may want to find the rows where x/true = aBeta and y/predicted=pTDP
-
-#     xCol = current Stain,  y=predictedStain
-#     """
-
-
-# @ app.callback(
-
-#     Output("image-grid", 'children'),
-#     Output("matrixSelectionInfo", "children"),
-#     Input('confusionMatrix-interactions', 'hoverData'))
-# def display_selected_data(selectedData):
-#     print(selectedData)
-#     if selectedData:
-#         ix = int(selectedData['points'][0]['z'])
-#         imageArray = []
-
-#         for i in range(1, 9):
-#             imgId = imageSet[ix+i]['_id']
-#             thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-#             imageArray.append(html.Img(src=thumbUrl, style=style))
-#         # imgId = imageSet[ix]['_id']
-#         # thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-#         # print(thumbUrl)
-#         return (imageArray, html.Div(json.dumps(selectedData)))
-#     # Dash ism... have to return two null arrays or callback fxn gets confused on the first run
-#     return ([], [])
-
-
-if __name__ == '__main__':
-    app.run_server(debug=True)
-
 # @app.callback(
-#     Output('hover-data', 'children'),
-#     Input('confusionMatrix-interactions', 'hoverData'))
-# def display_hover_data(hoverData):
-#     return json.dumps(hoverData, indent=2)
+#     Output('cur-hover-image', 'children'),
+#     [Input('datatable-interactivity', 'active_cell')],
+
+#     # Input('datatable-interactivity', 'selected_row_ids'),
+#     [State('datatable-interactivity', 'data')]
+# )
+# def update_img_dataview(active_cell, table_data):
+#     print(active_cell)
+#     return json.dumps(active_cell)
 
 
-# # using the z property from the current confusoin matrix, this will need to change
-# Markdown supports images with this syntax: ![alt](src) where alt refers to the image's alt text and src is the path to the image (the src property).
+# Now creating an image viewer
+
+    # return [
+    #     dbc.Col(dcc.Graph(
+    #         id=column,
+    #         figure=px.histogram(dff, x=column)
+
+    #     ), width=3)
+    #     # check if column exists - user may have deleted it
+    #     # If `column.deletable=False`, then you don't
+    #     # need to do this check.
+    #     for column in ["currentStain", "modelLabel"] if column in dff
+    # ]
+
+
+# table = dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True)
+
+
+# with open("imageSetForCm.json", "r") as fp:
+#     imageSet = json.load(fp)
+
+# image_df = pd.DataFrame(imageSet)
+# with open("predictionSample.json", "r") as fp:
+#     predictionSample = json.load(fp)
+# Statistics regarding the main ADRC data set including current and predicted Stains.. this will evolve over time
