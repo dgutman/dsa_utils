@@ -15,15 +15,18 @@ def gen_DSA_DataTable(df, summaryColumns=[], columns_to_ignore=[], addlColSet=[]
 
     """
 
+
     rowBelowDataTable = addlColSet + [
         dbc.Col(html.Div(id="cur-hover-image"), width=2),
-        dbc.Col(dbc.Row(id="datatable-interactivity-container"), width=4),
+        dbc.Col(dbc.Row(id="datatable-interactivity-container"), width=6),
     ]
+    ### TO DO: Think about the width for the interactivity container
 
-    #    dbc.Col(dcc.Graph(id="confMatrix_heatmap"), width=2),
     table = html.Div(
         [
-            dash_table.DataTable(
+            dbc.Accordion(
+            [
+            dbc.AccordionItem(dash_table.DataTable(
                 id="datatable-interactivity",
                 columns=[
                     {"name": i, "id": i, "deletable": False, "selectable": True}
@@ -43,7 +46,11 @@ def gen_DSA_DataTable(df, summaryColumns=[], columns_to_ignore=[], addlColSet=[]
                 page_action="native",
                 page_current=0,
                 page_size=10,
-            ),
+            ),title="DSA DataTable")]
+            ,start_collapsed=True),
+
+
+
             dbc.Row(rowBelowDataTable),
         ]
     )

@@ -13,6 +13,9 @@ import plotly.figure_factory as ff
 from graphCallBackLayout import callBackOutputs
 import get_dataset as gds
 import dsaDataTable as dtt
+import dataViewComponent as dvc
+
+
 
 # Config Parameters, may move to a yaml or config.json file
 dbName = "sqliteDb/confMatrixDB.db"
@@ -38,43 +41,11 @@ lblSet = ["HE", "Tau", "Syn", "aBeta", "pTDP", "Biels"]
 # print(list(df.currentStain.values))
 # print(df.modelLabel.values)
 cm = metrics.confusion_matrix(list(df.currentStain.values), list(df.modelLabel.values), labels=lblSet)
-cmfig = dbc.Col(dcc.Graph(figure=ff.create_annotated_heatmap(cm, x=lblSet, y=lblSet, colorscale="Viridis")), width=3)
+cmfig = dbc.Col(dcc.Graph(figure=px.imshow(cm, x=lblSet, y=lblSet),id='basicGraphInteractions'), width=3)
 
-
+# , colorscale="Viridis"
 table = dtt.gen_DSA_DataTable(
     df, columns_to_ignore=["modelResponse", "baseParentId", "description"], addlColSet=[cmfig]
-)
-
-
-table_collapse = html.Div(
-    [
-        dbc.Button(
-            "Open collapse",
-            id="collapse-button",
-            className="lb-12",
-            color="primary",
-            n_clicks=0,
-        ),
-        dbc.Collapse(
-            dbc.Card(table),
-            id="main-collapse",
-            is_open=False,
-        ),
-    ]
-)
-
-
-ack = dbc.Accordion(
-    [
-        dbc.AccordionItem(
-            [
-                html.P("This is the content of the first section"),
-                dbc.Button("Click here"),
-            ],
-            title="Item 1",
-            is_open=False,
-        ),
-    ]
 )
 
 
@@ -85,6 +56,8 @@ ack = dbc.Accordion(
     [State("datatable-interactivity", "data")],
 )
 def display_click_data(active_cell, table_data):
+    thumbUrl = ""
+
     if active_cell:
         cell = json.dumps(active_cell, indent=2)
         row = active_cell["row"]
@@ -130,7 +103,7 @@ def update_graphs(rows, derived_virtual_selected_rows):
             fig.update_xaxes(
                 tickangle=45, automargin=False, tickfont=dict(family="Rockwell", color="crimson", size=10)
             )
-            histSet.append(dbc.Col(dcc.Graph(figure=fig, id=c + "_hist"), width=6))
+            histSet.append(dbc.Col(dcc.Graph(figure=fig, id=c + "_hist"),width=6))
     ### To do perhaps make the width of this part iterable.. this width is a percentage of the base container
 
     return histSet
@@ -144,50 +117,98 @@ dataSetDescriptors = [
 ]
 
 
+imgGridId='image-grid'
+img_grid_dataview = dvc.generate_dataview_components(componentId=imgGridId)
+
+
+callbackArea = dbc.Row(
+    
+    [
+        dbc.Col(html.Div([
+            dcc.Markdown("""
+                **Hover Data**
+
+                Mouse over values in the graph.
+            """),
+            html.Pre(id='hover-data'),
+        ]),width=1),
+    dbc.Col(   
+            img_grid_dataview
+            
+        ,width=10 ),
+      
+    ])
+# style=styles['pre']
+
+
 app.layout = html.Div(
     [
-        ack,
-        table
-        # dmc.AccordionPanel(
-        #     dbc.Row(
-        #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
-        #             dbc.Col(
-        #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
-        #          ])
-        # ),
-        # mancordion,
-        # dmcStuff
+             table,
+             html.Div(id='cmi',  children=[]),
+             callbackArea
     ]
 )
 
-if __name__ == "__main__":
-    app.run_server(debug=True)
+style = {
+    "border": f"1px solid {dmc.theme.DEFAULT_COLORS['indigo'][4]}",
+    "textAlign": "center",
+    "width": 200,
+    "height": 200
+}
 
 
-# def getSelectedItemSet(confMatrix_df, xCol, yCol):
-#     """This expects the pandas dataframe which should be the data fed into the confusion matrix generation
-#     and I want to filter this dataframe and return the rows that match the selected row/column / x/y grid
-#     So for example, I may want to find the rows where x/true = aBeta and y/predicted=pTDP
 
-#     xCol = current Stain,  y=predictedStain
-#     """
+@app.callback(
+    [Output('hover-data', 'children'),
+      Output("image-grid", 'children')],
+    [Input('basicGraphInteractions', 'hoverData'),
+    Input('image-grid-pager','active_page')])
+def display_hover_data(hoverData,activePage):
+    ## Hover data returns the x/y of the grid... in my case this wuld be
+    ## currentStain and modelLabel
+    ## TO DO is make these axis into columns
 
+    ## Verify I didn't invert this..
+    modelLabel = hoverData['points'][0]['x']
+    currentStain = hoverData['points'][0]['y']
+    print(modelLabel,currentStain)
+    imageArray= []
+    
+    dataForGrid = df[(df['modelLabel']==modelLabel)].to_dict("records")
+
+
+    if activePage:
+        offSet = 10*activePage  ## Need to add pageSize
+    else:
+        offSet = 0
+
+    print(activePage)
+    ## TO DO.. NEED TO ADD IN THE PAGER LOGIC
+
+    for i in range(1,10):
+        imgId = dataForGrid[i+offSet]['_id']
+        imgName = dataForGrid[i+offSet]['name']
+        thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
+        imageArray.append(dmc.Image(src=thumbUrl,style=style,caption=imgName))
+
+
+    return (json.dumps(hoverData, indent=2),imageArray)
+
+
+# , style=style
 
 # @ app.callback(
-
 #     Output("image-grid", 'children'),
 #     Output("matrixSelectionInfo", "children"),
-#     Input('confusionMatrix-interactions', 'hoverData'))
+#     Input('basicGraphInteractions', 'hoverData'))
 # def display_selected_data(selectedData):
 #     print(selectedData)
 #     if selectedData:
 #         ix = int(selectedData['points'][0]['z'])
 #         imageArray = []
 
-#         for i in range(1, 9):
-#             imgId = imageSet[ix+i]['_id']
-#             thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-#             imageArray.append(html.Img(src=thumbUrl, style=style))
+#         # for i in range(1, 9):
+#         #     
 #         # imgId = imageSet[ix]['_id']
 #         # thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
 #         # print(thumbUrl)
@@ -196,13 +217,87 @@ if __name__ == "__main__":
 #     return ([], [])
 
 
+
+
+
+
+
+# @app.callback(
+#     Output('click-data', 'children'),
+#     Input('basic-interactions', 'clickData'))
+# def display_click_data(clickData):
+#     return json.dumps(clickData, indent=2)
+
+
+# @app.callback(
+#     Output('selected-data', 'children'),
+#     Input('basic-interactions', 'selectedData'))
+# def display_selected_data(selectedData):
+#     return json.dumps(selectedData, indent=2)
+
+
+# @app.callback(
+#     Output('relayout-data', 'children'),
+#     Input('basic-interactions', 'relayoutData'))
+# def display_relayout_data(relayoutData):
+#     return json.dumps(relayoutData, indent=2)
+
+
+if __name__ == "__main__":
+    app.run_server(debug=True)
+
+
+
+#   html.Div([
+#             dcc.Markdown("""
+#                 **Click Data**
+
+#                 Click on points in the graph.
+#             """),
+#             html.Pre(id='click-data'), #style=styles['pre']
+#         ], className='three columns'),
+
+#         html.Div([
+#             dcc.Markdown("""
+#                 **Selection Data**
+
+#                 Choose the lasso or rectangle tool in the graph's menu
+#                 bar and then select points in the graph.
+
+#                 Note that if `layout.clickmode = 'event+select'`, selection data also
+#                 accumulates (or un-accumulates) selected data if you hold down the shift
+#                 button while clicking.
+#             """),
+#             html.Pre(id='selected-data', ),#style=styles['pre']
+#         ], className='three columns'),
+
+#         html.Div([
+#             dcc.Markdown("""
+#                 **Zoom and Relayout Data**
+
+#                 Click and drag on the graph to zoom or click on the zoom
+#                 buttons in the graph's menu bar.
+#                 Clicking on legend items will also fire
+#                 this event.
+#             """),
+#             html.Pre(id='relayout-data', ),
+#         ], className='three columns')
+
 # @app.callback(
 #     Output('hover-data', 'children'),
 #     Input('confusionMatrix-interactions', 'hoverData'))
 # def display_hover_data(hoverData):
 #     return json.dumps(hoverData, indent=2)
 
-
+   # dmc.AccordionPanel(
+        #     dbc.Row(
+        #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
+        #             dbc.Col(
+        #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
+        #          ])
+        # ),
+        # mancordion,
+        # dmcStuff
 # # using the z property from the current confusoin matrix, this will need to change
 # Markdown supports images with this syntax: ![alt](src) where alt refers to the image's alt text and src is the path to the image (the src property).
 # figure={
@@ -261,15 +356,6 @@ if __name__ == "__main__":
 # df = pd.read_json("predictionSample.json")
 # df = df.drop(columns='allPredictions')
 
-# dsaItemTable = dash_table.DataTable(
-#     data=df.to_dict('records'),
-#     columns=[{'id': c, 'name': c} for c in df.columns],
-#     page_size=10)
-
-# z = cm
-# x = lblSet
-# y = lblSet
-# print(cm)
 
 # dmcStuff = dmc.SimpleGrid(
 #     cols=8,
@@ -286,46 +372,6 @@ if __name__ == "__main__":
 #     ],
 # )
 
-# mancordion = dmc.AccordionMultiple(
-#     children=[
-#         dmc.AccordionItem(
-#             [
-#                 dmc.AccordionControl("DSA Item DataTable"),
-#                 dmc.AccordionPanel(
-#                     dsaItemTable
-#                 ),
-#             ],
-#             value="DSA Datatable",
-#         ),
-#         dmc.AccordionItem(
-#             [
-#                 dmc.AccordionControl("Confusion Matrix"),
-#                 dmc.AccordionPanel(
-#                     dbc.Row(
-#                         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
-#                          dbc.Col(
-#                          html.Div(id='matrixSelectionInfo',  children=[]), width=3)
-#                          ])
-#                 ),
-#             ],
-#             value="Confusion Matrix",
-#         ),     dmc.AccordionItem(
-#             [
-#                 dmc.AccordionControl("callBacks"),
-#                 dmc.AccordionPanel(callBackOutputs)
-#             ],
-#             value="callBacks",
-#         ),
-#         dmc.AccordionItem(
-#             [
-#                 dmc.AccordionControl("imageGrid"),
-#                 dmc.AccordionPanel(
-#                 ),
-#             ],
-#             value="image View",
-#         ),
-#     ],
-# )
 
 
 # @app.callback(
@@ -342,17 +388,6 @@ if __name__ == "__main__":
 
 # Now creating an image viewer
 
-# return [
-#     dbc.Col(dcc.Graph(
-#         id=column,
-#         figure=px.histogram(dff, x=column)
-
-#     ), width=3)
-#     # check if column exists - user may have deleted it
-#     # If `column.deletable=False`, then you don't
-#     # need to do this check.
-#     for column in ["currentStain", "modelLabel"] if column in dff
-# ]
 
 
 # table = dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True)
