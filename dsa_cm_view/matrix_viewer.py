@@ -19,45 +19,91 @@ dbName = "sqliteDb/confMatrixDB.db"
 dsaBaseUrl = "https://styx.neurology.emory.edu/girder/api/v1"
 
 
-external_stylesheets = [
-    'https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
+external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css", dbc.themes.BOOTSTRAP]
 
 app = Dash(__name__, external_stylesheets=external_stylesheets)
 
 ####################### LOAD ADRC Data Table ##############################
 df = gds.getConfusionMatrixData(dbName)
 
+## I need to make sure that none of the values I feed into the confusion matrix are None or this fails
+
+df.currentStain.fillna("Unk", inplace=True)
+df.replace({"Abeta": "aBeta", "Ptdp": "pTDP", "He": "HE"}, inplace=True)
+
+
+### Generate the confusion matrix based on the data frame that was just loaded..
+lblSet = ["HE", "Tau", "Syn", "aBeta", "pTDP", "Biels"]
+# print(df)
+# print(list(df.currentStain.values))
+# print(df.modelLabel.values)
+cm = metrics.confusion_matrix(list(df.currentStain.values), list(df.modelLabel.values), labels=lblSet)
+cmfig = dbc.Col(dcc.Graph(figure=ff.create_annotated_heatmap(cm, x=lblSet, y=lblSet, colorscale="Viridis")), width=3)
+
 
 table = dtt.gen_DSA_DataTable(
-    df, columns_to_ignore=['modelResponse', 'baseParentId', 'description'])
+    df, columns_to_ignore=["modelResponse", "baseParentId", "description"], addlColSet=[cmfig]
+)
+
+
+table_collapse = html.Div(
+    [
+        dbc.Button(
+            "Open collapse",
+            id="collapse-button",
+            className="lb-12",
+            color="primary",
+            n_clicks=0,
+        ),
+        dbc.Collapse(
+            dbc.Card(table),
+            id="main-collapse",
+            is_open=False,
+        ),
+    ]
+)
+
+
+ack = dbc.Accordion(
+    [
+        dbc.AccordionItem(
+            [
+                html.P("This is the content of the first section"),
+                dbc.Button("Click here"),
+            ],
+            title="Item 1",
+            is_open=False,
+        ),
+    ]
+)
 
 
 @app.callback(
-    Output('cur-hover-image', 'children'),
-    [Input('datatable-interactivity', 'active_cell')],
+    Output("cur-hover-image", "children"),
+    [Input("datatable-interactivity", "active_cell")],
     # (A) pass table as data input to get current value from active cell "coordinates"
-    [State('datatable-interactivity', 'data')]
+    [State("datatable-interactivity", "data")],
 )
 def display_click_data(active_cell, table_data):
     if active_cell:
         cell = json.dumps(active_cell, indent=2)
-        row = active_cell['row']
-        col = active_cell['column_id']
+        row = active_cell["row"]
+        col = active_cell["column_id"]
         value = table_data[row][col]
-        out = '%s\n%s' % (cell, value)
-        imgId = table_data[row]['imageId']
+        out = "%s\n%s" % (cell, value)
+        imgId = table_data[row]["imageId"]
         # Create an Image From this as well
-        thumbUrl = f'{dsaBaseUrl}/item/{imgId}/tiles/thumbnail'
-
+        thumbUrl = f"{dsaBaseUrl}/item/{imgId}/tiles/thumbnail"
     else:
-        out = 'no cell selected'
+        out = "no cell selected"
     return [json.dumps(active_cell, indent=2), html.Img(src=thumbUrl)]
 
 
 @app.callback(
-    Output('datatable-interactivity-container', "children"),
-    Input('datatable-interactivity', "derived_virtual_data"),
-    Input('datatable-interactivity', "derived_virtual_selected_rows"))
+    Output("datatable-interactivity-container", "children"),
+    Input("datatable-interactivity", "derived_virtual_data"),
+    Input("datatable-interactivity", "derived_virtual_selected_rows"),
+)
 def update_graphs(rows, derived_virtual_selected_rows):
     # When the table is first rendered, `derived_virtual_data` and
     # `derived_virtual_selected_rows` will be `None`. This is due to an
@@ -73,8 +119,7 @@ def update_graphs(rows, derived_virtual_selected_rows):
 
     dff = df if rows is None else pd.DataFrame(rows)
 
-    colors = ['#7FDBFF' if i in derived_virtual_selected_rows else '#0074D9'
-              for i in range(len(dff))]
+    colors = ["#7FDBFF" if i in derived_virtual_selected_rows else "#0074D9" for i in range(len(dff))]
     histSet = []
     # Add in the image viewer window here
 
@@ -82,37 +127,40 @@ def update_graphs(rows, derived_virtual_selected_rows):
         # Make sure the column is in the current dataframe
         if c in dff:
             fig = px.histogram(dff, x=c)
-            fig.update_xaxes(tickangle=45, automargin=False, tickfont=dict(
-                family='Rockwell', color='crimson', size=10))
-
-            histSet.append(
-                dbc.Col(dcc.Graph(figure=fig, id=c+'_hist'), width=3)
+            fig.update_xaxes(
+                tickangle=45, automargin=False, tickfont=dict(family="Rockwell", color="crimson", size=10)
             )
+            histSet.append(dbc.Col(dcc.Graph(figure=fig, id=c + "_hist"), width=6))
+    ### To do perhaps make the width of this part iterable.. this width is a percentage of the base container
 
     return histSet
 
 
-currentStainHistogram = px.histogram(df, x='currentStain')
-predictedStainHistogram = px.histogram(df, x='modelResponse')
+currentStainHistogram = px.histogram(df, x="currentStain")
+predictedStainHistogram = px.histogram(df, x="modelResponse")
 dataSetDescriptors = [
     dbc.Col(dcc.Graph(figure=currentStainHistogram)),
-    dbc.Col(dcc.Graph(figure=predictedStainHistogram))
+    dbc.Col(dcc.Graph(figure=predictedStainHistogram)),
 ]
 
-app.layout = html.Div([
-    table
-    # dmc.AccordionPanel(
-    #     dbc.Row(
-    #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
-    #             dbc.Col(
-    #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
-    #          ])
-    # ),
-    # mancordion,
-    # dmcStuff
-])
 
-if __name__ == '__main__':
+app.layout = html.Div(
+    [
+        ack,
+        table
+        # dmc.AccordionPanel(
+        #     dbc.Row(
+        #         [dbc.Col(dcc.Graph(figure=cmfig, id='confusionMatrix-interactions'), width=5),
+        #             dbc.Col(
+        #             html.Div(id='matrixSelectionInfo',  children=[]), width=3)
+        #          ])
+        # ),
+        # mancordion,
+        # dmcStuff
+    ]
+)
+
+if __name__ == "__main__":
     app.run_server(debug=True)
 
 
@@ -222,7 +270,6 @@ if __name__ == '__main__':
 # x = lblSet
 # y = lblSet
 # print(cm)
-# cmfig = ff.create_annotated_heatmap(cm, x=x, y=y, colorscale='Viridis')
 
 # dmcStuff = dmc.SimpleGrid(
 #     cols=8,
@@ -295,17 +342,17 @@ if __name__ == '__main__':
 
 # Now creating an image viewer
 
-    # return [
-    #     dbc.Col(dcc.Graph(
-    #         id=column,
-    #         figure=px.histogram(dff, x=column)
+# return [
+#     dbc.Col(dcc.Graph(
+#         id=column,
+#         figure=px.histogram(dff, x=column)
 
-    #     ), width=3)
-    #     # check if column exists - user may have deleted it
-    #     # If `column.deletable=False`, then you don't
-    #     # need to do this check.
-    #     for column in ["currentStain", "modelLabel"] if column in dff
-    # ]
+#     ), width=3)
+#     # check if column exists - user may have deleted it
+#     # If `column.deletable=False`, then you don't
+#     # need to do this check.
+#     for column in ["currentStain", "modelLabel"] if column in dff
+# ]
 
 
 # table = dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True)
