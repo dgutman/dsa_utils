@@ -174,7 +174,7 @@ def display_hover_data(hoverData,activePage):
     print(modelLabel,currentStain)
     imageArray= []
     
-    dataForGrid = df[(df['modelLabel']==modelLabel)].to_dict("records")
+    dataForGrid = df[(df['modelLabel']==modelLabel) & (df['currentStain']==currentStain)].to_dict("records")
 
 
     if activePage:
