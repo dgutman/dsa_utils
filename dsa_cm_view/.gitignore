@@ -1,3 +1,4 @@
 .ipynb_checkpoints/
 dsa_cm_view/cmenv/
 dsa_cm_view/models/
+.env/

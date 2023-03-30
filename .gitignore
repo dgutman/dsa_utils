@@ -1,2 +1,5 @@
 dsa_cm_view/cmenv/*
 dsa_cm_view/models/
+*/.env/
+dsa_cm_view/.env
+*.pyc
